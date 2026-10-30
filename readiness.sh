@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Pairing readiness: no installs, no privileged operations, no secrets collected.
+set -u
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+REPORT="$ROOT/results.js"
+status=""; detail=""
+b64(){ printf '%s' "$1" | base64 | tr -d '\r\n'; }
+entry(){ local id="$1"; printf '  {id:"%s",status:"%s",detailB64:"%s"},\n' "$id" "$status" "$(b64 "$detail")" >> "$REPORT"; }
+pass(){ status=pass; detail="$1"; }
+fail(){ status=fail; detail="$1"; }
+unknown(){ status=unknown; detail="$1"; }
+command_exists(){ command -v "$1" >/dev/null 2>&1; }
+run_quick(){ # $1 timeout seconds, remainder command
+  local secs="$1"; shift
+  if command_exists timeout; then timeout "$secs" "$@" 2>&1
+  elif command_exists gtimeout; then gtimeout "$secs" "$@" 2>&1
+  else "$@" 2>&1
+  fi
+}
+{
+  printf 'window.REPORT_ITEMS = [\n'
+} > "$REPORT"
+OS=$(uname -s); ARCH=$(uname -m)
+pass "$OS / $ARCH"; entry os
+TMPBASE="${TMPDIR:-/tmp}"
+if tmpcheck=$(mktemp "${TMPBASE%/}/pairing-check.XXXXXX" 2>/dev/null); then
+  if printf 'test' > "$tmpcheck" 2>/dev/null && [ "$(cat "$tmpcheck" 2>/dev/null)" = test ]; then pass 'Temporary workspace can be created and written'; else fail 'Unable to write to temporary workspace'; fi
+  rm -f "$tmpcheck"
+else fail 'Unable to create a temporary file (check local permissions)'; fi
+entry permissions
+if ! command_exists docker; then fail 'Docker CLI not found. Install or enable Docker Desktop/Engine.'
+else
+  dv=$(docker --version 2>/dev/null | head -1)
+  result=$(run_quick 8 docker info --format '{{.ServerVersion}}' 2>&1)
+  if [ $? -eq 0 ]; then pass "Docker installed and engine running ($dv; engine $result)"
+  else fail "Docker CLI installed ($dv), but engine is inaccessible. Start Docker Desktop/Engine and retry. ${result:0:420}"
+  fi
+fi
+entry docker
+if command_exists git && git --version >/dev/null 2>&1; then pass "$(git --version 2>/dev/null)"; else fail 'Git not found or not executable'; fi
+entry git
+found=''
+for cmd in python3 python go ruby node java dotnet; do
+ if command_exists "$cmd"; then found="$found${found:+, }$cmd"; fi
+done
+if [ -n "$found" ]; then pass "Available runtimes: $found"; else unknown 'No supported runtime detected on PATH'; fi
+entry language
+editors=''
+for cmd in code codium vim nvim nano emacs subl idea; do
+ if command_exists "$cmd"; then editors="$editors${editors:+, }$cmd"; fi
+done
+if [ "$OS" = Darwin ]; then
+ for app in '/Applications/Visual Studio Code.app' '/Applications/Xcode.app' '/Applications/IntelliJ IDEA.app' '/Applications/Sublime Text.app'; do
+  if [ -d "$app" ]; then editors="$editors${editors:+, }$(basename "$app")"; fi
+ done
+fi
+if [ -n "$editors" ]; then pass "Detected editors: $editors"; else unknown 'No known editor detected; some GUI-only installations may be missed'; fi
+entry editor
+if command_exists curl && curl -fsSI --connect-timeout 5 --max-time 10 https://github.com >/dev/null 2>&1; then pass 'GitHub reachable over HTTPS'; else fail 'Could not reach github.com over HTTPS (check internet/proxy)'; fi
+entry network
+if command_exists kubectl; then
+ if run_quick 6 kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then pass 'Kubernetes cluster reachable (optional)'; else unknown 'kubectl available but no reachable cluster (optional)'; fi
+else unknown 'kubectl not installed (optional)'; fi
+entry k8s
+printf '];\nwindow.REPORT_GENERATED_AT = "%s";\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$REPORT"
+printf '\nDiagnostics written to: %s\n' "$REPORT"
+case "$OS" in
+ Darwin) open "$ROOT/report.html" >/dev/null 2>&1 && echo 'Opening report in your browser.' ;;
+ Linux) if command_exists xdg-open; then xdg-open "$ROOT/report.html" >/dev/null 2>&1 && echo 'Opening report in your browser.'; else echo "Open $ROOT/report.html in your browser"; fi ;;
+esac
+printf 'To re-test, run this script again. No applications were installed.\n'
