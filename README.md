@@ -25,7 +25,7 @@ Open Terminal or PowerShell in the extracted repository folder.
 - **macOS / Linux:** `bash readiness.sh`
 - **Windows PowerShell:** `.\readiness.ps1`
 
-Enter your **candidate details** and **GitHub username**, click **Verify account**, and run the webcam and screen-sharing tests. Choose **Save as PDF / Print** to save the report. To re-test local tools, run the script again and refresh the page.
+Enter your **candidate details** and the GitHub username in the **GitHub connectivity & account** check, then click **Verify account**. That button becomes **Re-test account** after a lookup. Run the webcam and screen-sharing tests, then choose **Save as PDF / Print** to save the report. To re-test local tools, run the script again and click **Refresh results** in the report.
 
 ## Notes
 
