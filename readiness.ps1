@@ -21,6 +21,21 @@ $edit=@('code','codium','vim','nvim','notepad','notepad++','subl') | Where-Objec
 $apps=@("$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe", "$env:ProgramFiles\Microsoft VS Code\Code.exe", "$env:ProgramFiles\JetBrains") | Where-Object { Test-Path $_ }
 if($edit.Count -or $apps.Count){Add-Check 'editor' 'pass' ('Detected editor(s): '+(($edit+$apps) -join ', '))}else{Add-Check 'editor' 'unknown' 'No known editor detected; GUI-only installations may be missed'}
 try { $response=Invoke-WebRequest -Uri 'https://github.com' -Method Head -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop; Add-Check 'network' 'pass' "GitHub reachable (HTTP $([int]$response.StatusCode))" }catch{Add-Check 'network' 'fail' 'GitHub cannot be reached over HTTPS'}
+try {
+ $downloadRequest=[System.Net.HttpWebRequest]::Create('https://speed.cloudflare.com/__down?bytes=1000000');$downloadRequest.Timeout=15000;$downloadRequest.ReadWriteTimeout=15000
+ $downloadTimer=[Diagnostics.Stopwatch]::StartNew();$downloadResponse=$downloadRequest.GetResponse();$responseMs=$downloadTimer.Elapsed.TotalMilliseconds
+ $downloadStream=$downloadResponse.GetResponseStream();$buffer=New-Object byte[] 65536;[long]$downloadBytes=0
+ while(($bytesRead=$downloadStream.Read($buffer,0,$buffer.Length)) -gt 0){$downloadBytes+=$bytesRead}
+ $downloadStream.Dispose();$downloadResponse.Close();$downloadTimer.Stop();$downloadMbps=($downloadBytes*8)/$downloadTimer.Elapsed.TotalSeconds/1000000
+ $uploadRequest=[System.Net.HttpWebRequest]::Create('https://speed.cloudflare.com/__up');$uploadRequest.Method='POST';$uploadRequest.ContentType='application/octet-stream';$uploadRequest.ContentLength=262144;$uploadRequest.Timeout=15000;$uploadRequest.ReadWriteTimeout=15000
+ $uploadTimer=[Diagnostics.Stopwatch]::StartNew();$uploadStream=$uploadRequest.GetRequestStream();for($chunk=0;$chunk -lt 4;$chunk++){$uploadStream.Write($buffer,0,$buffer.Length)};$uploadStream.Dispose()
+ $uploadResponse=$uploadRequest.GetResponse();$uploadResponse.Close();$uploadTimer.Stop();$uploadMbps=(262144*8)/$uploadTimer.Elapsed.TotalSeconds/1000000
+ $internetDetail='Cloudflare response {0} ms; download {1} Mbps; upload {2} Mbps' -f [Math]::Round($responseMs),[Math]::Round($downloadMbps,1),[Math]::Round($uploadMbps,1)
+ if($responseMs -le 300 -and $downloadMbps -ge 5 -and $uploadMbps -ge 2){Add-Check 'internet' 'pass' "$internetDetail; meets the suggested video-call baseline"}
+ else{Add-Check 'internet' 'review' "$internetDetail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"}
+}catch{Add-Check 'internet' 'unknown' 'Internet quality could not be measured; the Cloudflare test did not complete'}
+$ssh=Get-Command ssh -ErrorAction SilentlyContinue
+if(!$ssh){Add-Check 'ssh' 'fail' 'OpenSSH client not found'}else{$sshOutput=(& $ssh.Source -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 git@github.com 2>&1 | Out-String).Trim();if($sshOutput -match 'successfully authenticated'){Add-Check 'ssh' 'pass' 'GitHub accepted your SSH key. Push access to your project repository was not checked.'}elseif($sshOutput -match '(?i)host key verification failed|host key.*not found|no .*host key.*known'){Add-Check 'ssh' 'unknown' 'GitHub host key is not trusted yet; verify it with ssh -T git@github.com, then rerun diagnostics'}else{$sshDetail=$sshOutput;if($sshDetail.Length -gt 350){$sshDetail=$sshDetail.Substring(0,350)};Add-Check 'ssh' 'fail' "GitHub SSH key authentication failed: $sshDetail"}}
 if(Get-Command kubectl -ErrorAction SilentlyContinue){$null=& kubectl cluster-info --request-timeout=5s 2>&1; if($LASTEXITCODE -eq 0){Add-Check 'k8s' 'pass' 'Kubernetes cluster reachable (optional)'}else{Add-Check 'k8s' 'unknown' 'No reachable Kubernetes cluster (optional)'}}else{Add-Check 'k8s' 'unknown' 'kubectl not found (optional)'}
 $js='window.REPORT_ITEMS = '+($items | ConvertTo-Json -Depth 5 -Compress)+';'+[Environment]::NewLine+'window.REPORT_GENERATED_AT = '+((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')|ConvertTo-Json)+';'
 [IO.File]::WriteAllText((Join-Path $root 'results.js'),$js,[Text.UTF8Encoding]::new($false))

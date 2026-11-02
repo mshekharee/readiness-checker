@@ -58,6 +58,37 @@ if [ -n "$editors" ]; then pass "Detected editors: $editors"; else unknown 'No k
 entry editor
 if command_exists curl && curl -fsSI --connect-timeout 5 --max-time 10 https://github.com >/dev/null 2>&1; then pass 'GitHub reachable over HTTPS'; else fail 'Could not reach github.com over HTTPS (check internet/proxy)'; fi
 entry network
+if command_exists curl && command_exists dd && command_exists awk; then
+  internet_download_metrics=$(curl -fsS --connect-timeout 5 --max-time 15 -o /dev/null -w '%{time_starttransfer} %{speed_download}' 'https://speed.cloudflare.com/__down?bytes=1000000' 2>/dev/null)
+  if [ $? -eq 0 ] && [ -n "$internet_download_metrics" ]; then
+    internet_response_seconds=${internet_download_metrics%% *}
+    internet_download_bytes_sec=${internet_download_metrics##* }
+    internet_upload_bytes_sec=$(dd if=/dev/zero bs=65536 count=4 2>/dev/null | curl -fsS --connect-timeout 5 --max-time 15 -o /dev/null -w '%{speed_upload}' --data-binary @- 'https://speed.cloudflare.com/__up' 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$internet_upload_bytes_sec" ]; then
+      internet_response_ms=$(awk -v seconds="$internet_response_seconds" 'BEGIN { printf "%.0f", seconds * 1000 }')
+      internet_download_mbps=$(awk -v rate="$internet_download_bytes_sec" 'BEGIN { printf "%.1f", rate * 8 / 1000000 }')
+      internet_upload_mbps=$(awk -v rate="$internet_upload_bytes_sec" 'BEGIN { printf "%.1f", rate * 8 / 1000000 }')
+      internet_detail="Cloudflare response ${internet_response_ms} ms; download ${internet_download_mbps} Mbps; upload ${internet_upload_mbps} Mbps"
+      if awk -v response="$internet_response_ms" -v download="$internet_download_mbps" -v upload="$internet_upload_mbps" 'BEGIN { exit !(response <= 300 && download >= 5 && upload >= 2) }'; then
+        pass "$internet_detail; meets the suggested video-call baseline"
+      else
+        status=review; detail="$internet_detail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"
+      fi
+    else unknown 'Internet quality could not be measured; the Cloudflare upload test did not complete'; fi
+  else unknown 'Internet quality could not be measured; the Cloudflare download test did not complete'; fi
+else unknown 'Internet quality test requires curl, dd, and awk'; fi
+entry internet
+if command_exists ssh; then
+  ssh_output=$(run_quick 10 ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 git@github.com 2>&1)
+  if printf '%s' "$ssh_output" | grep -Fq 'successfully authenticated'; then
+    pass 'GitHub accepted your SSH key. Push access to your project repository was not checked.'
+  elif printf '%s' "$ssh_output" | grep -Eqi 'host key verification failed|no .*host key.*known|host key.*not found'; then
+    unknown 'GitHub host key is not trusted yet; verify it with ssh -T git@github.com, then rerun diagnostics'
+  else
+    fail "GitHub SSH key authentication failed: ${ssh_output:0:350}"
+  fi
+else fail 'OpenSSH client not found'; fi
+entry ssh
 if command_exists kubectl; then
  if run_quick 6 kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then pass 'Kubernetes cluster reachable (optional)'; else unknown 'kubectl available but no reachable cluster (optional)'; fi
 else unknown 'kubectl not installed (optional)'; fi
