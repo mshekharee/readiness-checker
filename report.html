@@ -12,7 +12,7 @@
 <script src="results.js"></script><script>
 const $=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const labels={os:'Operating system',permissions:'Workspace permissions',docker:'Docker installed and running',git:'Git installed',language:'Programming language',editor:'Development editor',network:'GitHub connectivity',internet:'Internet quality (optional)',ssh:'GitHub SSH authentication',k8s:'Kubernetes cluster (optional)',github:'GitHub connectivity & account',camera:'Webcam',microphone:'Microphone',screen:'Screen sharing'};
+const labels={os:'Operating system',permissions:'Workspace permissions',docker:'Container runtime',git:'Git installed',language:'Programming language',editor:'Development editor',network:'GitHub connectivity',internet:'Internet quality (optional)',ssh:'GitHub SSH authentication',k8s:'Kubernetes cluster (optional)',github:'GitHub connectivity & account',camera:'Webcam',microphone:'Microphone',screen:'Screen sharing'};
 function b64decode(s){try{return new TextDecoder().decode(Uint8Array.from(atob(s),c=>c.charCodeAt(0)))}catch(e){return 'Unable to decode check detail'}}
 const items={};for(let r of (window.REPORT_ITEMS||[])){items[r.id]={status:r.status,detail:b64decode(r.detailB64)}}
 let githubUsername='',githubChecking=false;

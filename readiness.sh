@@ -28,14 +28,32 @@ if tmpcheck=$(mktemp "${TMPBASE%/}/pairing-check.XXXXXX" 2>/dev/null); then
   rm -f "$tmpcheck"
 else fail 'Unable to create a temporary file (check local permissions)'; fi
 entry permissions
-if ! command_exists docker; then fail 'Docker CLI not found. Install or enable Docker Desktop/Engine.'
-else
-  dv=$(docker --version 2>/dev/null | head -1)
-  result=$(run_quick 8 docker info --format '{{.ServerVersion}}' 2>&1)
-  if [ $? -eq 0 ]; then pass "Docker installed and engine running ($dv; engine $result)"
-  else fail "Docker CLI installed ($dv), but engine is inaccessible. Start Docker Desktop/Engine and retry. ${result:0:420}"
+container_result=''
+if command_exists docker; then
+  docker_version=$(docker --version 2>/dev/null | head -1)
+  if result=$(run_quick 8 docker info --format '{{.ServerVersion}}'); then
+    docker_context=$(docker context show 2>/dev/null)
+    if [ "$docker_context" = colima ]; then
+      container_result="Colima engine reachable (${docker_version}; engine $result)"
+    else
+      container_result="Docker-compatible engine reachable (${docker_version}${docker_context:+; context $docker_context}; engine $result)"
+    fi
   fi
 fi
+if [ -z "$container_result" ] && command_exists colima && command_exists docker; then
+  if run_quick 8 colima status >/dev/null && result=$(run_quick 8 docker --context colima info --format '{{.ServerVersion}}'); then
+    docker_version=$(docker --version 2>/dev/null | head -1)
+    container_result="Colima engine reachable (${docker_version}; context colima; engine $result)"
+  fi
+fi
+if [ -z "$container_result" ] && command_exists podman; then
+  podman_version=$(podman --version 2>/dev/null | head -1)
+  if result=$(run_quick 8 podman info --format '{{.Host.Version}}'); then
+    container_result="Podman engine reachable (${podman_version}; engine $result)"
+  fi
+fi
+if [ -n "$container_result" ]; then pass "$container_result"
+else fail 'No supported container engine is accessible. Start Docker, Colima, or Podman, then retry.'; fi
 entry docker
 if command_exists git && git --version >/dev/null 2>&1; then pass "$(git --version 2>/dev/null)"; else fail 'Git not found or not executable'; fi
 entry git

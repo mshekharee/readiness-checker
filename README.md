@@ -1,6 +1,6 @@
 # Pairing Round — Readiness Checker
 
-Check your laptop before a DevOps pairing interview. The checker checks Docker, Git, system permissions, development tools, GitHub connectivity, and internet quality, then opens a local HTML report for webcam, microphone, screen-sharing tests, and PDF export. **No software installation or administrator access is required by the checker itself.**
+Check your laptop before a DevOps pairing interview. The checker checks a container runtime (Docker-compatible engines such as Docker Desktop or Colima, and Podman), Git, system permissions, development tools, GitHub connectivity, and internet quality, then opens a local HTML report for webcam, microphone, screen-sharing tests, and PDF export. **No software installation or administrator access is required by the checker itself.**
 
 ## Run from GitHub (recommended)
 
@@ -29,7 +29,7 @@ Enter the GitHub username in the **GitHub connectivity & account** check, then c
 
 ## Notes
 
-- Docker must be installed and its engine running; no test container image is downloaded. Kubernetes is optional and excluded from the final score.
+- Docker, Colima, or Podman must be installed and its engine running. Colima is checked through the Docker CLI and its `colima` context; it does not need to be the currently selected Docker context. No test container image is downloaded. Kubernetes is optional and excluded from the final score.
 - GitHub supports both HTTPS and SSH. The required SSH check confirms GitHub accepts your key, but it does not check whether you can push to your project repository. The bootstrap download remains HTTPS-based so it works without SSH configuration.
 - The optional Internet quality check contacts Cloudflare and transfers up to 1 MB of test data down and 256 KB of synthetic data up. It reports response time and measured speeds; a low result is a review, not a readiness failure.
 - GitHub verification checks HTTPS connectivity and whether the public account exists; it does not verify repository push access.

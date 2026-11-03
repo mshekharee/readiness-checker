@@ -5,14 +5,30 @@ $items=New-Object System.Collections.Generic.List[object]
 function Add-Check([string]$Id,[string]$Status,[string]$Detail){ $items.Add(@{id=$Id; status=$Status; detailB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Detail))}) }
 Add-Check 'os' 'pass' "Windows / $($env:PROCESSOR_ARCHITECTURE)"
 try { $f=Join-Path ([IO.Path]::GetTempPath()) ("pairing-"+[guid]::NewGuid().ToString()+'.tmp'); 'test' | Set-Content $f -ErrorAction Stop; $r=Get-Content $f -ErrorAction Stop; Remove-Item $f -ErrorAction SilentlyContinue; if($r -eq 'test'){Add-Check 'permissions' 'pass' 'Temporary workspace can be created and written'}else{Add-Check 'permissions' 'fail' 'Workspace test failed'} }catch{Add-Check 'permissions' 'fail' "Cannot write temporary workspace: $($_.Exception.Message)"}
-$docker=Get-Command docker -ErrorAction SilentlyContinue
-if(!$docker){Add-Check 'docker' 'fail' 'Docker CLI not found. Install or enable Docker Desktop.'}
-else {
- $v=(& docker --version 2>&1 | Out-String).Trim()
- $out=(& docker info --format '{{.ServerVersion}}' 2>&1 | Out-String).Trim()
- if($LASTEXITCODE -eq 0){Add-Check 'docker' 'pass' "Docker installed and engine running ($v; engine $out)"}
- else{Add-Check 'docker' 'fail' "Docker CLI present ($v) but engine inaccessible. Start Docker Desktop and retry. $($out.Substring(0,[Math]::Min(250,$out.Length)))"}
+$containerDetail=$null
+if(Get-Command docker -ErrorAction SilentlyContinue){
+ $dockerVersion=(& docker --version 2>&1 | Out-String).Trim()
+ $dockerInfo=(& docker info --format '{{.ServerVersion}}' 2>&1 | Out-String).Trim()
+ if($LASTEXITCODE -eq 0){
+  $dockerContext=(& docker context show 2>$null | Out-String).Trim()
+    if($dockerContext -eq 'colima'){$containerDetail="Colima engine reachable ($dockerVersion; engine $dockerInfo)"}
+    else{$contextDetail=if($dockerContext){"; context $dockerContext"}else{''};$containerDetail="Docker-compatible engine reachable ($dockerVersion$contextDetail; engine $dockerInfo)"}
+ }
 }
+if(!$containerDetail -and (Get-Command colima -ErrorAction SilentlyContinue) -and (Get-Command docker -ErrorAction SilentlyContinue)){
+ $null=& colima status 2>&1
+ if($LASTEXITCODE -eq 0){
+    $colimaInfo=(& docker --context colima info --format '{{.ServerVersion}}' 2>&1 | Out-String).Trim()
+    if($LASTEXITCODE -eq 0){$dockerVersion=(& docker --version 2>&1 | Out-String).Trim();$containerDetail="Colima engine reachable ($dockerVersion; context colima; engine $colimaInfo)"}
+ }
+}
+if(!$containerDetail -and (Get-Command podman -ErrorAction SilentlyContinue)){
+ $podmanVersion=(& podman --version 2>&1 | Out-String).Trim()
+ $podmanInfo=(& podman info --format '{{.Host.Version}}' 2>&1 | Out-String).Trim()
+ if($LASTEXITCODE -eq 0){$containerDetail="Podman engine reachable ($podmanVersion; engine $podmanInfo)"}
+}
+if($containerDetail){Add-Check 'docker' 'pass' $containerDetail}
+else{Add-Check 'docker' 'fail' 'No supported container engine is accessible. Start Docker, Colima, or Podman, then retry.'}
 $git=Get-Command git -ErrorAction SilentlyContinue
 if($git){$v=(& git --version 2>&1 | Out-String).Trim();Add-Check 'git' 'pass' $v}else{Add-Check 'git' 'fail' 'Git not found on PATH'}
 $langs=@('python','python3','go','ruby','node','java','dotnet') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue }
