@@ -21,6 +21,26 @@ if [[ -z "$source_dir" || ! -f "$source_dir/readiness.sh" || ! -f "$source_dir/r
 dest="${HOME}/.pairing-readiness-checker"
 mkdir -p "$dest"
 cp "$source_dir/readiness.sh" "$source_dir/report.html" "$dest/"
-echo 'Running local system checks...'
-bash "$dest/readiness.sh"
+checks_output="$work/checks-output"
+bash "$dest/readiness.sh" >"$checks_output" 2>&1 &
+checks_pid=$!
+dots=''
+while kill -0 "$checks_pid" 2>/dev/null; do
+  case "$dots" in
+    '') dots='.' ;;
+    '.') dots='..' ;;
+    '..') dots='...' ;;
+    *) dots='' ;;
+  esac
+  printf '\rRunning local system checks%-3s' "$dots"
+  sleep 0.4
+done
+if wait "$checks_pid"; then
+  checks_status=0
+else
+  checks_status=$?
+fi
+printf '\rRunning local system checks... done\n'
+cat "$checks_output"
+if (( checks_status != 0 )); then exit "$checks_status"; fi
 echo "Report files: $dest"

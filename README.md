@@ -30,7 +30,7 @@ Enter the GitHub username in the **GitHub connectivity & account** check, then c
 ## Notes
 
 - Docker, Colima, or Podman must be installed and its engine running. Colima is checked through the Docker CLI and its `colima` context; it does not need to be the currently selected Docker context. No test container image is downloaded. Kubernetes is optional and excluded from the final score. If the pairing exercise uses Kubernetes, start the local cluster (if applicable) and make sure `kubectl` is using the cluster before running diagnostics.
-- GitHub supports both HTTPS and SSH. The required SSH check confirms GitHub accepts your key, but it does not check whether you can push to your project repository. The bootstrap download remains HTTPS-based so it works without SSH configuration.
+- GitHub supports both HTTPS and SSH. The SSH check authenticates your GitHub account with `ssh -T`; it does not target a repository or verify project-repository access. The bootstrap download remains HTTPS-based so it works without SSH configuration.
 - The optional Internet quality check contacts Cloudflare and transfers up to 1 MB of test data down and 256 KB of synthetic data up. It reports response time and measured speeds; a low result is a review, not a readiness failure.
 - GitHub verification checks HTTPS connectivity and whether the public account exists; it does not verify repository push access.
 - Diagnostic results stay on your computer in `results.js` (`~/.pairing-readiness-checker` when using the bootstrap command). No report is uploaded; the Internet quality test contacts Cloudflare and sends synthetic test bytes.

@@ -99,11 +99,11 @@ entry internet
 if command_exists ssh; then
   ssh_output=$(run_quick 10 ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 git@github.com 2>&1)
   if printf '%s' "$ssh_output" | grep -Fq 'successfully authenticated'; then
-    pass 'GitHub accepted your SSH key. Push access to your project repository was not checked.'
+    pass 'GitHub accepted your SSH key for account authentication; no repository access was tested.'
   elif printf '%s' "$ssh_output" | grep -Eqi 'host key verification failed|no .*host key.*known|host key.*not found'; then
     unknown 'GitHub host key is not trusted yet; verify it with ssh -T git@github.com, then rerun diagnostics'
   else
-    fail "GitHub SSH key authentication failed: ${ssh_output:0:350}"
+    fail "GitHub SSH authentication failed (no repository is targeted by this check): ${ssh_output:0:300}"
   fi
 else fail 'OpenSSH client not found'; fi
 entry ssh
