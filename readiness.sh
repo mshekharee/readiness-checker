@@ -87,10 +87,12 @@ if command_exists curl && command_exists dd && command_exists awk; then
       internet_download_mbps=$(awk -v rate="$internet_download_bytes_sec" 'BEGIN { printf "%.1f", rate * 8 / 1000000 }')
       internet_upload_mbps=$(awk -v rate="$internet_upload_bytes_sec" 'BEGIN { printf "%.1f", rate * 8 / 1000000 }')
       internet_detail="Cloudflare response ${internet_response_ms} ms; download ${internet_download_mbps} Mbps; upload ${internet_upload_mbps} Mbps"
-      if awk -v response="$internet_response_ms" -v download="$internet_download_mbps" -v upload="$internet_upload_mbps" 'BEGIN { exit !(response <= 300 && download >= 5 && upload >= 2) }'; then
-        pass "$internet_detail; meets the suggested video-call baseline"
+      if awk -v response="$internet_response_ms" -v download="$internet_download_mbps" -v upload="$internet_upload_mbps" 'BEGIN { exit !(response <= 100 && download >= 25 && upload >= 10) }'; then
+        status=excellent; detail="$internet_detail; excellent connection"
+      elif awk -v response="$internet_response_ms" -v download="$internet_download_mbps" -v upload="$internet_upload_mbps" 'BEGIN { exit !(response <= 300 && download >= 5 && upload >= 2) }'; then
+        status=good; detail="$internet_detail; meets the suggested video-call baseline"
       else
-        status=review; detail="$internet_detail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"
+        status=poor; detail="$internet_detail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"
       fi
     else unknown 'Internet quality could not be measured; the Cloudflare upload test did not complete'; fi
   else unknown 'Internet quality could not be measured; the Cloudflare download test did not complete'; fi
@@ -108,8 +110,8 @@ if command_exists ssh; then
 else fail 'OpenSSH client not found'; fi
 entry ssh
 if command_exists kubectl; then
- if run_quick 6 kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then pass 'Kubernetes cluster reachable (optional)'; else unknown 'kubectl available but no reachable cluster (optional)'; fi
-else unknown 'kubectl not installed (optional)'; fi
+ if run_quick 6 kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then pass 'Cluster reachable'; else unknown 'No reachable cluster'; fi
+else unknown 'kubectl not installed'; fi
 entry k8s
 printf '];\nwindow.REPORT_GENERATED_AT = "%s";\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$REPORT"
 printf '\nDiagnostics written to: %s\n' "$REPORT"

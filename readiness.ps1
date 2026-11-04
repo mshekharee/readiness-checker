@@ -47,12 +47,13 @@ try {
  $uploadTimer=[Diagnostics.Stopwatch]::StartNew();$uploadStream=$uploadRequest.GetRequestStream();for($chunk=0;$chunk -lt 4;$chunk++){$uploadStream.Write($buffer,0,$buffer.Length)};$uploadStream.Dispose()
  $uploadResponse=$uploadRequest.GetResponse();$uploadResponse.Close();$uploadTimer.Stop();$uploadMbps=(262144*8)/$uploadTimer.Elapsed.TotalSeconds/1000000
  $internetDetail='Cloudflare response {0} ms; download {1} Mbps; upload {2} Mbps' -f [Math]::Round($responseMs),[Math]::Round($downloadMbps,1),[Math]::Round($uploadMbps,1)
- if($responseMs -le 300 -and $downloadMbps -ge 5 -and $uploadMbps -ge 2){Add-Check 'internet' 'pass' "$internetDetail; meets the suggested video-call baseline"}
- else{Add-Check 'internet' 'review' "$internetDetail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"}
+ if($responseMs -le 100 -and $downloadMbps -ge 25 -and $uploadMbps -ge 10){Add-Check 'internet' 'excellent' "$internetDetail; excellent connection"}
+ elseif($responseMs -le 300 -and $downloadMbps -ge 5 -and $uploadMbps -ge 2){Add-Check 'internet' 'good' "$internetDetail; meets the suggested video-call baseline"}
+ else{Add-Check 'internet' 'poor' "$internetDetail; below the suggested video-call baseline (300 ms response, 5 Mbps down, 2 Mbps up)"}
 }catch{Add-Check 'internet' 'unknown' 'Internet quality could not be measured; the Cloudflare test did not complete'}
 $ssh=Get-Command ssh -ErrorAction SilentlyContinue
 if(!$ssh){Add-Check 'ssh' 'fail' 'OpenSSH client not found'}else{$sshOutput=(& $ssh.Source -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 git@github.com 2>&1 | Out-String).Trim();if($sshOutput -match 'successfully authenticated'){Add-Check 'ssh' 'pass' 'GitHub accepted your SSH key for account authentication; no repository access was tested.'}elseif($sshOutput -match '(?i)host key verification failed|host key.*not found|no .*host key.*known'){Add-Check 'ssh' 'unknown' 'GitHub host key is not trusted yet; verify it with ssh -T git@github.com, then rerun diagnostics'}else{$sshDetail=$sshOutput;if($sshDetail.Length -gt 300){$sshDetail=$sshDetail.Substring(0,300)};Add-Check 'ssh' 'fail' "GitHub SSH authentication failed (no repository is targeted by this check): $sshDetail"}}
-if(Get-Command kubectl -ErrorAction SilentlyContinue){$null=& kubectl cluster-info --request-timeout=5s 2>&1; if($LASTEXITCODE -eq 0){Add-Check 'k8s' 'pass' 'Kubernetes cluster reachable (optional)'}else{Add-Check 'k8s' 'unknown' 'No reachable Kubernetes cluster (optional)'}}else{Add-Check 'k8s' 'unknown' 'kubectl not found (optional)'}
+if(Get-Command kubectl -ErrorAction SilentlyContinue){$null=& kubectl cluster-info --request-timeout=5s 2>&1; if($LASTEXITCODE -eq 0){Add-Check 'k8s' 'pass' 'Cluster reachable'}else{Add-Check 'k8s' 'unknown' 'No reachable cluster'}}else{Add-Check 'k8s' 'unknown' 'kubectl not installed'}
 $js='window.REPORT_ITEMS = '+($items | ConvertTo-Json -Depth 5 -Compress)+';'+[Environment]::NewLine+'window.REPORT_GENERATED_AT = '+((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')|ConvertTo-Json)+';'
 [IO.File]::WriteAllText((Join-Path $root 'results.js'),$js,[Text.UTF8Encoding]::new($false))
 Write-Host 'Readiness diagnostics complete. Opening report...'
